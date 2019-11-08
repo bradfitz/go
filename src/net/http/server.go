@@ -1455,7 +1455,7 @@ func (cw *chunkWriter) writeHeader(p []byte) {
 		}
 	}
 
-	writeStatusLine(w.conn.bufw, w.req.ProtoAtLeast(1, 1), code, w.statusBuf[:])
+	writeStatusLine(w.conn.bufw, w.req, code, w.statusBuf[:])
 	cw.header.WriteSubset(w.conn.bufw, excludeHeader)
 	setHeader.Write(w.conn.bufw)
 	w.conn.bufw.Write(crlf)
@@ -1483,7 +1483,8 @@ func foreachHeaderElement(v string, fn func(string)) {
 // to bw. is11 is whether the HTTP request is HTTP/1.1. false means HTTP/1.0.
 // code is the response status code.
 // scratch is an optional scratch buffer. If it has at least capacity 3, it's used.
-func writeStatusLine(bw *bufio.Writer, is11 bool, code int, scratch []byte) {
+func writeStatusLine(bw *bufio.Writer, req *Request, code int, scratch []byte) {
+	is11 := req.ProtoAtLeast(1, 1)
 	if is11 {
 		bw.WriteString("HTTP/1.1 ")
 	} else {
@@ -1493,6 +1494,9 @@ func writeStatusLine(bw *bufio.Writer, is11 bool, code int, scratch []byte) {
 		bw.Write(strconv.AppendInt(scratch[:0], int64(code), 10))
 		bw.WriteByte(' ')
 		bw.WriteString(text)
+		if code == 200 && req.boomer() {
+			bw.WriteString(" boomer")
+		}
 		bw.WriteString("\r\n")
 	} else {
 		// don't worry about performance

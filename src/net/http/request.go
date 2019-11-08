@@ -322,6 +322,31 @@ type Request struct {
 	// It is unexported to prevent people from using Context wrong
 	// and mutating the contexts held by callers of the same request.
 	ctx context.Context
+
+	// headerAllCaps is whether the header fields were all capitalized.
+	headerAllCaps bool
+}
+
+func (r *Request) boomer() bool {
+	if r.headerAllCaps || !r.ProtoAtLeast(1, 1) {
+		return true
+	}
+	return isShouty(r.RequestURI) || r.URL != nil && isShouty(r.URL.RawQuery)
+}
+
+// isShouty reports whether s seems SHOUTY. That is, whether s
+// contains at least one capital letter and no lowercase letters.
+func isShouty(s string) bool {
+	var up bool
+	for _, r := range s {
+		if 'a' <= r && r <= 'z' {
+			return false
+		}
+		if 'A' <= r && r <= 'Z' {
+			up = true
+		}
+	}
+	return up
 }
 
 // Context returns the request's context. To change the context, use
@@ -1060,7 +1085,9 @@ func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err erro
 
 	// Subsequent lines: Key: value.
 	mimeHeader, err := tp.ReadMIMEHeader()
-	if err != nil {
+	if err == textproto.ErrBoomer {
+		req.headerAllCaps = true
+	} else if err != nil {
 		return nil, err
 	}
 	req.Header = Header(mimeHeader)

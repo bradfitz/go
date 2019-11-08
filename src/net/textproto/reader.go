@@ -7,6 +7,7 @@ package textproto
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -461,6 +462,17 @@ func (r *Reader) ReadDotLines() ([]string, error) {
 	return v, err
 }
 
+func allCaps(bs []byte) bool {
+	for _, b := range bs {
+		if 'a' <= b && b <= 'z' {
+			return false
+		}
+	}
+	return true
+}
+
+var ErrBoomer = errors.New("ok boomer")
+
 // ReadMIMEHeader reads a MIME-style header from r.
 // The header is a sequence of possibly continued Key: Value lines
 // ending in a blank line.
@@ -502,9 +514,13 @@ func (r *Reader) ReadMIMEHeader() (MIMEHeader, error) {
 		return m, ProtocolError("malformed MIME header initial line: " + string(line))
 	}
 
+	var caps, notCaps bool
 	for {
 		kv, err := r.readContinuedLineSlice(mustHaveFieldNameColon)
 		if len(kv) == 0 {
+			if err == nil && caps && !notCaps {
+				err = ErrBoomer
+			}
 			return m, err
 		}
 
@@ -512,6 +528,11 @@ func (r *Reader) ReadMIMEHeader() (MIMEHeader, error) {
 		i := bytes.IndexByte(kv, ':')
 		if i < 0 {
 			return m, ProtocolError("malformed MIME header line: " + string(kv))
+		}
+		if allCaps(kv[:i]) {
+			caps = true
+		} else {
+			notCaps = true
 		}
 		key := canonicalMIMEHeaderKey(kv[:i])
 
